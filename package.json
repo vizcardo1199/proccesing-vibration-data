@@ -1,0 +1,29 @@
+{
+  "name": "proccesing-vibration-data",
+  "version": "1.0.0",
+  "description": "Vibration analisys",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "integrated-displacement-velocity" : "cd integrated_displacement_velocity && node index.js",
+    "waveform-accelerations" : "cd waveform_accelerations && node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vizcardo1199/proccesing-vibration-data.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/vizcardo1199/proccesing-vibration-data/issues"
+  },
+  "dependencies": {
+    "cron": "^2.4.0",
+    "dotenv": "^8.2.0",
+    "moment": "^2.29.4",
+    "mysql2": "^3.5.2",
+    "pino": "^8.15.0",
+    "pino-pretty": "^10.2.0"
+  },
+  "homepage": "https://github.com/vizcardo1199/proccesing-vibration-data#readme"
+}
