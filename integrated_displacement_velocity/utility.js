@@ -243,8 +243,7 @@ const insertVelocity = async function (data,surveyId) {
 }
 
 const  insertDisplacement = async function (data,surveyId) {
-  logger.info
-(`Inserting data: ${data.length} in survey ${surveyId}`);
+  logger.info(`Inserting data: ${data.length} in survey ${surveyId}`);
   const connection = await mysql.createConnection(dbConfig);
   try {
     let sql = `insert into waveforms_displacement (row_point, row_survey, wfd_timestamp, wfd_measure_y, wfd_measure_x, create_user, state, update_date, update_user, create_date)  VALUES ?`;

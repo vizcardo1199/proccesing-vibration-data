@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "integrated-displacement-velocity" : "cd integrated_displacement_velocity && node index.js",
-    "waveform-accelerations" : "cd waveform_accelerations && node index.js"
+    "create-survey" : "cd create_survey && node index.js"
   },
   "repository": {
     "type": "git",
