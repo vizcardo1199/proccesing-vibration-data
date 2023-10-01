@@ -16,13 +16,26 @@ const dbConfig = {
   multipleStatements: true,
   connectionLimit: process.env.DATABASE_MAX_POOL_SIZE,
 };
-
+taskRunning=false
 var job = new CronJob(
-  "10 * * * * *",  async function() {
+  "* * * * * *",  async function() {
+    start()
+},
+null,
+true,
+"America/Los_Angeles"
+);
+async function start(){
+  if (taskRunning) {
+    return
+  }
+  taskRunning=true
+
   console.log("Starting");
   let candidatesMawoi = [];
   const last_processed_row = await getLastProcessRow();
   const candidates = await getCantidates(last_processed_row[0]["current"]);
+  logger.info("last process", last_processed_row )
   if (candidates?.length > 0) {
     logger.info(`All candidates for analisys: ${candidates.length}`);
     candidates.forEach(async candidate => {
@@ -76,13 +89,15 @@ var job = new CronJob(
             date //  create_date:
           ]);
         } else {
-
+          
           surveysCandidates.done.push(exists[0])
 
         }
         return surveysCandidates;
 
       }) );
+
+     
 
       //Updateing mawois with Surveys done on DB 
       if (surveysCandidates[0]?.done.length > 0) {
@@ -100,6 +115,7 @@ var job = new CronJob(
        
       }
       if (surveysCandidates[0]?.insert.length > 0) {
+
         logger.info("Insertando nuevo survey ",surveysCandidates[0]?.insert)
         const result = await insertSurvey(surveysCandidates[0]?.insert);
         const surveyId = JSON.parse(JSON.stringify(result))[0].insertId;
@@ -122,21 +138,26 @@ var job = new CronJob(
       if(waveforms_acceleration.length > 0)
         await insertWaveform(waveforms_acceleration);
       topics_row = removeDuplicates(candidatesMawoi.map(item => item.row_topic));
+    
       max_row_topics = Math.max(...topics_row);
+      logger.log("new max topics",max_row_topics)
       await updateParameters(max_row_topics,)
 
     }
+
     // candidatesMawoi.forEach(async candidate =>{
     //   console.log(candidate)
     // })
   } else {
     logger.warn("No candidates");
   }
-},
-null,
-true,
-"America/Los_Angeles"
-);
+  taskRunning=false
+
+
+}
+
+
+// start()
 
 //   null,
 //   true,
@@ -256,7 +277,9 @@ async function  getCantidates(last_processed_row) {
     }
     // Conexión a la base de datos
     // Consulta para obtener los datos del vector de aceleración
-    const query = `SELECT c.row_topic, c.tp_message, p.row_point as row_point, p.row_mawoi FROM mqtt_topics c left join points p on p.row_point  = CAST(SPLIT_STRING(tp_message, ",", 1) AS UNSIGNED) WHERE c.state AND c.tp_topic = "${topic_value}"  AND row_topic > ${last_processed_row} ORDER BY row_topic LIMIT 5000`;
+    // const query = `SELECT c.row_topic, c.tp_message, p.row_point as row_point, p.row_mawoi  FROM mqtt_topics c left join points p on p.row_point  = CAST(SPLIT_STRING(tp_message, ",", 1) AS UNSIGNED) inner join surveys s on s.row_mawoi = p.row_mawoi WHERE c.state AND c.tp_topic =  "${topic_value}" AND row_topic >=  ${last_processed_row} and s.sv_init_date  >= DATE_SUB(NOW(),INTERVAL 15 MINUTE) and DATE_ADD(NOW(),INTERVAL 15 MINUTE) >= s.sv_init_date and s.row_survey  is not null and s.state  = 1 ORDER BY row_topic LIMIT 5000`;
+    const query = `SELECT DISTINCT c.row_topic, c.tp_message, p.row_point as row_point, p.row_mawoi  FROM mqtt_topics c left join points p on p.row_point  = CAST(SPLIT_STRING(tp_message, ",", 1) AS UNSIGNED) inner join surveys s on s.row_mawoi = p.row_mawoi WHERE c.state AND c.tp_topic =  "${topic_value}" AND row_topic >  ${last_processed_row}  and s.row_survey  is not null and s.state  = 1 ORDER BY row_topic LIMIT 5000`;
+
     // const query = `SELECT c.row_topic, c.tp_message , p.row_point , p.row_mawoi , s.row_survey ,sv_init_date,sv_end_date FROM mqtt_topics c left join points p on p.row_point  = CAST(SPLIT_STRING(tp_message, ",", 1) AS UNSIGNED) left join surveys s on p.row_mawoi  = s.row_mawoi  and s.state  = 1 WHERE c.state AND c.tp_topic = "${topic_value}" AND row_topic > ${last_processed_row}   ORDER BY row_topic LIMIT 1000`;
     logger.info(query);
     const [rows] = await connection.execute(query);
