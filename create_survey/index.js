@@ -73,31 +73,16 @@ async function start(){
         const date = moment(new Date()).format("YYYY-MM-DD HH:mm:ss");
         const result = candidatesMawoi.find(x => x.row_mawoi === mawoi);
         const exists =  await checkIfSurveyExists(mawoi,result["measure_timestamp_gmt"]);
-        if(!exists) {
-
-          surveysCandidates.insert.push([
-            result.row_mawoi, // row_mawoi:
-            result.measure_timestamp_gmt, // measure_timestamp_gmt:
-            result.lower_timestamp_gmt, // lower_timestamp_gmt:
-            result.upper_timestamp_gmt, //  upper_timestamp_gmt:
-            false, //sv_is_reference:
-            "+0000", //sv_gmt:
-            false, //   sv_band_processed:
-            false, //    sv_waveform_processed:
-            "CREATE_USER_NODE", //   create_user:
-            true, // state:
-            date //  create_date:
-          ]);
-        } else {
-          
+        if(exists) {
           surveysCandidates.done.push(exists[0])
-
+        }  else {
+          logger.warn("Survey todavia no existe")
+          return
         }
         return surveysCandidates;
 
       }) );
 
-     
 
       //Updateing mawois with Surveys done on DB 
       if (surveysCandidates[0]?.done.length > 0) {
@@ -114,34 +99,27 @@ async function start(){
         })
        
       }
-      if (surveysCandidates[0]?.insert.length > 0) {
-
-        logger.info("Insertando nuevo survey ",surveysCandidates[0]?.insert)
-        const result = await insertSurvey(surveysCandidates[0]?.insert);
-        const surveyId = JSON.parse(JSON.stringify(result))[0].insertId;
-        surveysCandidates[0]?.insert.map(x =>{
-          const row_mawoi = x[0];
-          console.log("Survey creado : row_survey ", surveyId, "row_mawoi ",row_mawoi)
-          candidatesMawoi = candidatesMawoi.map(obj => {
-            if (obj.row_mawoi === row_mawoi) {
-                return { ...obj, row_survey: surveyId };
-            }
-            return obj;
-        });
-        })
-      }
 
       let waveforms_acceleration = [];
       candidatesMawoi.forEach(x=>{
         waveforms_acceleration.push([x.row_point,x.row_survey,x.row_timestamp,x.row_measure_x, x.row_measure_y,'CREATE_USER_NODE',true,null,null,new Date()])
       })
-      if(waveforms_acceleration.length > 0)
+      if(waveforms_acceleration.length > 0){
+        var fs = require('fs');
+
+          fs.writeFile ("input.json", JSON.stringify(waveforms_acceleration), function(err) {
+            if (err) throw err;
+            console.log('complete');
+            }
+        );
         await insertWaveform(waveforms_acceleration);
-      topics_row = removeDuplicates(candidatesMawoi.map(item => item.row_topic));
+        topics_row = removeDuplicates(candidatesMawoi.map(item => item.row_topic));
     
-      max_row_topics = Math.max(...topics_row);
-      logger.log("new max topics",max_row_topics)
-      await updateParameters(max_row_topics,)
+        max_row_topics = Math.max(...topics_row);
+        logger.info("new max topics",max_row_topics)
+        await updateParameters(max_row_topics,)
+      }
+   
 
     }
 
@@ -277,8 +255,8 @@ async function  getCantidates(last_processed_row) {
     }
     // Conexión a la base de datos
     // Consulta para obtener los datos del vector de aceleración
-    // const query = `SELECT c.row_topic, c.tp_message, p.row_point as row_point, p.row_mawoi  FROM mqtt_topics c left join points p on p.row_point  = CAST(SPLIT_STRING(tp_message, ",", 1) AS UNSIGNED) inner join surveys s on s.row_mawoi = p.row_mawoi WHERE c.state AND c.tp_topic =  "${topic_value}" AND row_topic >=  ${last_processed_row} and s.sv_init_date  >= DATE_SUB(NOW(),INTERVAL 15 MINUTE) and DATE_ADD(NOW(),INTERVAL 15 MINUTE) >= s.sv_init_date and s.row_survey  is not null and s.state  = 1 ORDER BY row_topic LIMIT 5000`;
-    const query = `SELECT DISTINCT c.row_topic, c.tp_message, p.row_point as row_point, p.row_mawoi  FROM mqtt_topics c left join points p on p.row_point  = CAST(SPLIT_STRING(tp_message, ",", 1) AS UNSIGNED) inner join surveys s on s.row_mawoi = p.row_mawoi WHERE c.state AND c.tp_topic =  "${topic_value}" AND row_topic >  ${last_processed_row}  and s.row_survey  is not null and s.state  = 1 ORDER BY row_topic LIMIT 5000`;
+    // const query = `SELECT DISTINCT c.row_topic, c.tp_message, p.row_point as row_point, p.row_mawoi  FROM mqtt_topics c left join points p on p.row_point  = CAST(SPLIT_STRING(tp_message, ",", 1) AS UNSIGNED) inner join surveys s on s.row_mawoi = p.row_mawoi WHERE c.state AND c.tp_topic =  "${topic_value}" AND row_topic >  ${last_processed_row} and s.sv_init_date  >= DATE_SUB(NOW(),INTERVAL 15 MINUTE) and DATE_ADD(NOW(),INTERVAL 15 MINUTE) >= s.sv_init_date and s.row_survey  is not null and s.state  = 1 ORDER BY row_topic LIMIT 5000`;
+    const query = `SELECT DISTINCT c.row_topic, c.tp_message, p.row_point as row_point, p.row_mawoi  FROM mqtt_topics c inner join points p on p.row_point  = CAST(SPLIT_STRING(tp_message, ",", 1) AS UNSIGNED) AND c.tp_topic =  "${topic_value}" AND row_topic >   ${last_processed_row}  and p.row_mawoi is not null ORDER BY row_topic LIMIT 5000`;
 
     // const query = `SELECT c.row_topic, c.tp_message , p.row_point , p.row_mawoi , s.row_survey ,sv_init_date,sv_end_date FROM mqtt_topics c left join points p on p.row_point  = CAST(SPLIT_STRING(tp_message, ",", 1) AS UNSIGNED) left join surveys s on p.row_mawoi  = s.row_mawoi  and s.state  = 1 WHERE c.state AND c.tp_topic = "${topic_value}" AND row_topic > ${last_processed_row}   ORDER BY row_topic LIMIT 1000`;
     logger.info(query);
@@ -343,6 +321,8 @@ const insertWaveform = async function(data) {
       } else {
         logger.info("Lote de mensajes waveforms_acceleration insertado:", result.affectedRows);
       }
+
+      console.log(sql)
     });
     connection.end();
     return value;
@@ -388,6 +368,8 @@ async function checkIfSurveyExists(mawoidID,measure_timestamp_gmt) {
     // Consulta para obtener los datos del vector de aceleración
     const query = `SELECT count(s.row_survey) as here, s.row_survey, s.row_mawoi FROM surveys s WHERE s.state AND s.row_mawoi = ${mawoidID} AND s.sv_init_date <= '${measure_timestamp_gmt}' AND '${measure_timestamp_gmt}' <= s.sv_end_date group by row_survey,row_mawoi;`;
     // const query = `SELECT c.row_topic, c.tp_message , p.row_point , p.row_mawoi , s.row_survey ,sv_init_date,sv_end_date FROM mqtt_topics c left join points p on p.row_point  = CAST(SPLIT_STRING(tp_message, ",", 1) AS UNSIGNED) left join surveys s on p.row_mawoi  = s.row_mawoi  and s.state  = 1 WHERE c.state AND c.tp_topic = "${topic_value}" AND row_topic > ${last_processed_row}   ORDER BY row_topic LIMIT 1000`;
+    logger.info(query)
+
     const [rows] = await connection.execute(query);
     // Cerrar la conexión a la base de datos
     connection.end();
